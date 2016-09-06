@@ -14,8 +14,9 @@ var centroidingWindowSize = 15;
 
 var SpectrumParser = {};
 
-SpectrumParser.data = {mzs: [], intensities: new Array(L / 2)};
-SpectrumParser.data.intensities.fill(0);
+SpectrumParser.data = {mzs: [], intensities: []};
+for (var k = 0; k < L / 2; k++)
+    SpectrumParser.data.intensities.push(0);
 
 SpectrumParser.parseChunk = function(chunk, parser) {
     if (chunk.errors)

@@ -140,7 +140,7 @@ function scilsExportDiv () {
             id: 'csv-input',
             onchange: m.withAttr('files', SpectrumParser.parse)
         }),
-        mImg('/static/images/export_csv.png')
+        mImg('static/images/export_csv.png')
     ]);
 }
 
@@ -169,8 +169,8 @@ function nextStepsDiv() {
         m('div', {class: 'alert alert-success'},
           'Almost done! Now open the dialog as shown below and press \'Paste values from clipboard\' button'),
         m('div', [
-            mImg('/static/images/import_csv.png'),
-            mImg('/static/images/paste_values.png')
+            mImg('static/images/import_csv.png'),
+            mImg('static/images/paste_values.png')
         ])
     ]);
 }

@@ -29,8 +29,9 @@ SpectrumParser.parseChunk = function(chunk, parser) {
         sp.data.intensities.push(chunk.data[i][1]);
     }
     var nPeaks = sp.data.mzs.length;
-    app.vm.message(`Parsing CSV (m/z ${sp.data.mzs[0]} .. ${sp.data.mzs[nPeaks - 1]})`)
-    m.redraw();
+
+    app.vm.csvParsingProgress(Math.floor(chunk.meta.cursor / sp.fileSize * 100.0));
+    m.redraw(true);
 }
 
 SpectrumParser.onComplete = function(results, file) {
@@ -52,6 +53,7 @@ SpectrumParser.onComplete = function(results, file) {
     var N = centroidingWindowSize;
     var halfN = Math.floor(centroidingWindowSize / 2);
     var centroids = [];
+    var centroidIntensities = [];
     for (var i = halfN; i < n - (N - halfN); i++) {
         var isLocalMaximum = (sp.data.intensities[i - 1] < sp.data.intensities[i] &&
                               sp.data.intensities[i] >= sp.data.intensities[i + 1]);
@@ -68,11 +70,17 @@ SpectrumParser.onComplete = function(results, file) {
         }
         mz /= totalIntensity;
         centroids.push([mz, maxIntensity]);
+        centroidIntensities.push(maxIntensity);
     }
 
+    // take at most 10000 peaks as centroids
+    centroidIntensities.sort(function(a, b) { return b - a; });
+    var threshold = centroidIntensities[Math.min(9999, centroidIntensities.length - 1)];
+    centroids = centroids.filter(function(c) { return c[1] >= threshold; });
+
     var table = {
-        fields: ['mz', 'intensity'],
-        data: centroids
+        fields: ['m/z'],
+        data: centroids.map(function(c) { return [c[0]]; })
     };
     app.vm.message('');
     app.vm.resultCsv(Papa.unparse(table));
@@ -92,7 +100,11 @@ SpectrumParser.parse = function(files) {
         chunk: SpectrumParser.parseChunk,
         complete: SpectrumParser.onComplete
     };
-    app.vm.message("Parsing CSV, this will take a few seconds...");
+    app.vm.gotCsv(true);
+    m.redraw();
+
+    SpectrumParser.fileSize = csv.size;
+
     Papa.parse(csv, config);
 }
 
@@ -103,8 +115,10 @@ app.vm = {
         app.vm.errorMessage = m.prop('');
         app.vm.message = m.prop('');
         app.vm.resultCsv = m.prop('');
+        app.vm.gotCsv = m.prop(false);
         app.vm.finished = m.prop(false);
         app.vm.copiedToClipboard = m.prop(false);
+        app.vm.csvParsingProgress = m.prop(0);
     }
 }
 
@@ -114,44 +128,69 @@ app.controller = function() {
 
 var nVisibleRows = 15;
 
+function mImg(src) {
+    return m('img', {src: src, style: {'max-width': '100%', 'height': 'auto'}});
+}
+
+function scilsExportDiv () {
+    return m('div', [
+        m('label', 'Select the overview spectrum CSV exported from SCiLS'),
+        m('input', {
+            type: 'file',
+            id: 'csv-input',
+            onchange: m.withAttr('files', SpectrumParser.parse)
+        }),
+        mImg('/static/images/export_csv.png')
+    ]);
+}
+
+function whatsHappeningDiv() {
+    return m('p', {class: 'bg-info'},
+             `Parsing CSV... ${app.vm.csvParsingProgress()}% complete`
+    );
+}
+
+function copyToClipboardDiv() {
+    return m('div',
+      [m('p', {class: 'bg-info'},
+         "Please copy the result to the clipboard by clicking the button"),
+       m('button', {class: 'btn',
+                    'data-clipboard-target': '#csv-result'},
+         "Copy values to clipboard"),
+       m('textarea', {class: 'form-control',
+                      id: 'csv-result',
+                      readonly: true, rows: nVisibleRows,
+                      value: app.vm.resultCsv()})
+      ]);
+}
+
+function nextStepsDiv() {
+    return m('div', [
+        m('div', {class: 'alert alert-success'},
+          'Almost done! Now open the dialog as shown below and press \'Paste values from clipboard\' button'),
+        m('div', [
+            mImg('/static/images/import_csv.png'),
+            mImg('/static/images/paste_values.png')
+        ])
+    ]);
+}
+
 app.view = function(ctrl) {
-    var leftPanel =
-        m('div', {class: 'form-group col-sm-6'},
-          [
-              m('label', 'Select the overview spectrum CSV exported from Scils Lab'),
-              m('input', {
-                  type: 'file',
-                  id: 'csv-input',
-                  onchange: m.withAttr('files', SpectrumParser.parse)
-              }),
-              m('div', app.vm.message())
-          ]);
-
-    var topElement;
-    if (app.vm.copiedToClipboard())
-        topElement = m('div', {class: 'alert alert-success'},
-                       'Done! To process another CSV file, reload the page');
-    else if (app.vm.finished())
-        topElement = m('button', {class: 'btn',
-                                'data-clipboard-target': '#csv-result'},
-                       "Copy to clipboard");
+    var panelContents;
+    if (!app.vm.gotCsv())
+        panelContents = [scilsExportDiv()];
+    else if (app.vm.gotCsv() && !app.vm.finished())
+        panelContents = [whatsHappeningDiv(), m('hr'), m('div', app.vm.message())];
+    else if (!app.vm.copiedToClipboard())
+        panelContents = [copyToClipboardDiv()];
     else
-        topElement = m('label', 'The result will appear here:');
+        panelContents = [nextStepsDiv()];
 
-    var rightPanel =
-        m('div', {class: 'col-sm-6'},
-          [
-              topElement,
-              m('textarea', {class: 'form-control',
-                             id: 'csv-result',
-                             readonly: true, rows: nVisibleRows,
-                             value: app.vm.resultCsv()})
-          ]);
-
-    var result = [leftPanel, rightPanel];
+    var result = m('div', {class: 'form-group col-sm-12'}, panelContents);
 
     if (app.vm.errorMessage() != '') {
-        var errorDiv = m('div', {class: 'alert alert-warning'}, app.vm.errorMessage());
+        var errorDiv = m('div', {class: 'col-sm-12 alert alert-warning'},
+                         app.vm.errorMessage());
         result = [errorDiv].concat(result);
     }
     return result;

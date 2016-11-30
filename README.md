@@ -15,5 +15,5 @@ and obtain a `.csv` file with the list of peaks, which can be imported back into
 
 ## Website
 
-All code is in `gh-pages` branch, and the Github-hosted website is located at https://spatialmetabolomics.github.io/centroidize/
+All code is in `gh-pages` branch, and the Github-hosted website is located at https://metaspace2020.github.io/centroidize/
 Usage should be straightforward as the website guides the user through a series of steps, showing example screenshots of SCiLS Lab software along the way.
